@@ -1,7 +1,15 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { supabase, supabaseEnabled } from "../lib/supabase";
 
-const AuthContext = createContext(null);
+const AuthContext = createContext({
+  user: null,
+  error: "",
+  loading: false,
+  login: async () => null,
+  logout: async () => null,
+  updateProfile: async () => null,
+  supabaseEnabled: false,
+});
 
 const DEFAULT_USERS = [
   {
@@ -27,6 +35,11 @@ export function AuthProvider({ children }) {
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const persistUser = (nextUser) => {
+    setUser(nextUser);
+    localStorage.setItem("cleanroute_user", JSON.stringify(nextUser));
+  };
 
   useEffect(() => {
     if (!supabaseEnabled || !supabase) return;
@@ -158,8 +171,41 @@ export function AuthProvider({ children }) {
     localStorage.removeItem("cleanroute_user");
   };
 
+  const updateProfile = async ({ name, truck_id }) => {
+    if (!user) return null;
+
+    const nextUser = {
+      ...user,
+      ...(name !== undefined && name !== null ? { name: name.trim() || user.name } : {}),
+      ...(truck_id !== undefined ? { truck_id: truck_id || null } : {}),
+    };
+
+    persistUser(nextUser);
+
+    if (supabaseEnabled && supabase && user.id) {
+      try {
+        const updates = {
+          name: nextUser.name,
+          truck_id: nextUser.truck_id,
+        };
+
+        await supabase.from("profiles").update(updates).eq("id", user.id);
+        await supabase.auth.updateUser({
+          data: {
+            name: nextUser.name,
+            truck_id: nextUser.truck_id,
+          },
+        });
+      } catch (sbError) {
+        console.warn("Supabase profile update failed:", sbError);
+      }
+    }
+
+    return nextUser;
+  };
+
   const value = useMemo(
-    () => ({ user, error, loading, login, logout, supabaseEnabled }),
+    () => ({ user, error, loading, login, logout, updateProfile, supabaseEnabled }),
     [user, error, loading]
   );
 
@@ -167,7 +213,5 @@ export function AuthProvider({ children }) {
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) throw new Error("useAuth must be used inside AuthProvider");
-  return context;
+  return useContext(AuthContext);
 }

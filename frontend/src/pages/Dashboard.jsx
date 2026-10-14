@@ -25,7 +25,7 @@ import { useAppData } from "../hooks/useAppData";
 import { average } from "../lib/utils";
 
 export default function Dashboard() {
-  const { bins, collections, currentRoute, notice } = useAppData();
+  const { bins, collections, currentRoute, notice, loading, error } = useAppData();
   const critical = bins.filter((bin) => bin.status === "Critical");
   const high = bins.filter((bin) => bin.status === "High");
   const medium = bins.filter((bin) => bin.status === "Medium");
@@ -62,6 +62,8 @@ export default function Dashboard() {
           Live urban waste intelligence driven by authoritative dataset. `waste_hotspot_level` is the ML predicted hotspot; `status` is collection priority.
         </p>
       </div>
+      {loading && <div className="rounded-xl bg-page px-4 py-3 text-sm text-slate-500">Loading live bins from the FastAPI dataset service...</div>}
+      {error && <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{error}</div>}
       {notice && <div className="rounded-xl bg-teal-50 px-4 py-3 text-sm text-primary">{notice}</div>}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard icon={Recycle} label="Total Bins" value={bins.length} />

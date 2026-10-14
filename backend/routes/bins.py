@@ -7,11 +7,15 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict
 
 from services.priority_service import calculate_priority
+from services.supabase_client import supabase_insert, supabase_update
 
 router = APIRouter()
 
 ROOT = Path(__file__).resolve().parents[2]
-CSV_PATH = ROOT / "ml" / "urban_waste_hotspot_dataset.csv"
+CSV_CANDIDATES = [
+    ROOT / "ml" / "dataset.csv",
+    ROOT / "ml" / "urban_waste_hotspot_dataset.csv",
+]
 
 # In-memory storage for active session updates
 _bins_cache: List[dict] = []
@@ -32,12 +36,22 @@ def _load_initial_bins():
     if _bins_cache:
         return _bins_cache
 
-    if not CSV_PATH.exists():
+    csv_path = next((path for path in CSV_CANDIDATES if path.exists()), None)
+    if not csv_path:
         return []
 
-    with open(CSV_PATH, "r", encoding="utf-8") as f:
+    with open(csv_path, "r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
-        rows = [next(reader) for _ in range(100)]
+        seen = set()
+        rows = []
+        for row in reader:
+            bin_id = row.get("bin_id")
+            if not bin_id or bin_id in seen:
+                continue
+            seen.add(bin_id)
+            rows.append(row)
+            if len(rows) >= 80:
+                break
 
     loaded = []
     for idx, r in enumerate(rows, start=1):
@@ -73,6 +87,9 @@ def _load_initial_bins():
             "road_congestion_index": round(float(r["road_congestion_index"]), 2),
             "travel_time_to_bin": round(float(r["travel_time_to_bin"]), 1),
             "road_closure_flag": int(r["road_closure_flag"]),
+            "nearest_road_distance": round(float(r["nearest_road_distance"]), 1) if r.get("nearest_road_distance") not in (None, "") else None,
+            "road_connectivity_index": round(float(r["road_connectivity_index"]), 2) if r.get("road_connectivity_index") not in (None, "") else None,
+            "junction_count": int(r["junction_count"]) if r.get("junction_count") not in (None, "") else None,
             "waste_hotspot_level": hotspot,
             "priority_score": p_info["priority_score"],
             "status": p_info["priority_status"],
@@ -197,6 +214,19 @@ def create_collection(payload: CollectionPayload):
         "status": "Collected",
     }
     _collections_cache.insert(0, record)
+    supabase_insert("collections", {
+        "bin_id": payload.bin_id,
+        "truck_id": record["truck_id"],
+        "collected_at": now_iso,
+        "fill_level_at_collection": record["fill_level_at_collection"],
+        "status": "Collected",
+    })
+    supabase_update("bins", "bin_id", payload.bin_id, {
+        "bin_fill_level": 8.0,
+        "last_collection_interval": 0.0,
+        "status": "Normal",
+        "updated_at": now_iso,
+    })
 
     # Reset bin fill level to approximately 8% as per requirements
     matched["bin_fill_level"] = 8.0

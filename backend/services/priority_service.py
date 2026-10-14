@@ -1,11 +1,6 @@
-import os
 from datetime import datetime, timezone
-from pathlib import Path
 
-from dotenv import load_dotenv
-import httpx
-
-load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+from services.supabase_client import supabase_insert
 
 HOTSPOT_MAP = {"High": 100, "Medium": 60, "Low": 30, "Normal": 30}
 
@@ -38,10 +33,6 @@ def calculate_priority(bin_fill_level, overflow_history, last_collection_interva
 
 
 def save_priority(bin_id, result):
-    url = os.getenv("SUPABASE_URL")
-    key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-    if not url or not key:
-        return {"saved": False, "reason": "Supabase unavailable. Priority calculated locally."}
     payload = {
         "bin_id": bin_id,
         "priority_score": result["priority_score"],
@@ -49,20 +40,42 @@ def save_priority(bin_id, result):
         "prediction": result["prediction"],
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
-    try:
-        response = httpx.post(
-            f"{url}/rest/v1/priority_scores",
-            headers={
-                "apikey": key,
-                "Authorization": f"Bearer {key}",
-                "Content-Type": "application/json",
-                "Prefer": "return=minimal",
-            },
-            json=payload,
-            timeout=10,
-        )
-        if response.status_code >= 400:
-            return {"saved": False, "reason": f"Supabase unavailable: {response.text}"}
-        return {"saved": True}
-    except httpx.HTTPError as exc:
-        return {"saved": False, "reason": f"Supabase unavailable: {exc}"}
+    return supabase_insert("priority_scores", payload)
+
+
+def save_prediction(bin_id, prediction, confidence, model_name="Random Forest"):
+    payload = {
+        "bin_id": bin_id,
+        "prediction": prediction,
+        "confidence": confidence,
+        "model_name": model_name,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    return supabase_insert("predictions", payload)
+
+
+def save_route(route):
+    payload = {
+        "truck_id": route["truck_id"],
+        "total_distance": route["total_distance"],
+        "estimated_time": route["estimated_time"],
+        "total_bins": route["total_bins"],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    inserted = supabase_insert("routes", payload)
+    if not inserted.get("saved"):
+        return inserted
+    rows = inserted.get("data") or []
+    route_id = rows[0]["id"] if rows else None
+    if route_id:
+        for stop in route.get("ordered_bins", []):
+            supabase_insert(
+                "route_bins",
+                {
+                    "route_id": route_id,
+                    "bin_id": stop["bin_id"],
+                    "sequence": stop["sequence"],
+                    "collected": False,
+                },
+            )
+    return {"saved": True, "route_id": route_id}

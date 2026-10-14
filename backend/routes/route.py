@@ -3,6 +3,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict
 
+from services.priority_service import save_route
 from services.route_service import optimize_route
 
 router = APIRouter()
@@ -38,11 +39,13 @@ class RouteRequest(BaseModel):
 @router.post("/optimize-route")
 def optimize(payload: RouteRequest):
     try:
-        return optimize_route(
+        result = optimize_route(
             payload.truck_id,
             payload.depot.model_dump(),
             [item.model_dump() for item in payload.bins],
         )
+        result["supabase"] = save_route(result)
+        return result
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:

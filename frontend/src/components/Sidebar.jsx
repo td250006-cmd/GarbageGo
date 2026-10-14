@@ -36,20 +36,25 @@ export default function Sidebar({ open, onClose }) {
     <>
       {open && <button className="fixed inset-0 z-20 bg-ink/30 lg:hidden" onClick={onClose} aria-label="Close menu" />}
       <aside
-        className={`fixed inset-y-0 left-0 z-30 w-64 transform bg-white px-4 py-6 shadow-card transition lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-30 w-64 transform bg-white px-3 py-5 shadow-card transition lg:static lg:translate-x-0 ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="mb-8 flex items-center gap-2 px-2">
-          <span className="rounded-xl bg-primary p-2 text-white">
-            <Binoculars size={20} />
+        <div className="mb-6 flex items-center gap-3 rounded-2xl bg-primary/5 px-3 py-2.5">
+          <span className="rounded-xl bg-primary p-2 text-white shadow-sm">
+            <Binoculars size={18} />
           </span>
           <div>
-            <p className="font-semibold text-primary">CleanRoute AI</p>
-            <p className="text-xs text-slate-500">Waste hotspot routing</p>
+            <p className="text-sm font-semibold text-primary">CleanRoute AI</p>
+            <p className="text-[11px] text-slate-500">Smart waste routing</p>
           </div>
         </div>
-        <nav className="space-y-1">
+
+        <div className="mb-3 px-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+          Quick Access
+        </div>
+
+        <nav className="space-y-1.5">
           {links.map((link) => {
             const Icon = link.icon;
             return (
@@ -58,13 +63,15 @@ export default function Sidebar({ open, onClose }) {
                 to={link.to}
                 onClick={onClose}
                 className={({ isActive }) =>
-                  `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium ${
-                    isActive ? "bg-primary text-white" : "text-slate-600 hover:bg-page"
+                  `flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-medium transition-all ${
+                    isActive
+                      ? "bg-primary text-white shadow-sm"
+                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                   }`
                 }
               >
-                <Icon size={18} />
-                {link.label}
+                <Icon size={17} />
+                <span>{link.label}</span>
               </NavLink>
             );
           })}

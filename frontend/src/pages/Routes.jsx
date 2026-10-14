@@ -8,32 +8,42 @@ import { optimizeRoute as apiOptimizeRoute } from "../services/api";
 
 export default function RoutesPage() {
   const { user } = useAuth();
-  const { bins, trucks, currentRoute, setOptimizedRoute } = useAppData();
+  const { bins, trucks, currentRoute, setOptimizedRoute, clearCurrentRoute } = useAppData();
   const [truckId, setTruckId] = useState(user?.truck_id || trucks[0]?.truck_id || "TRK-01");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
+  const isUrgentCandidate = (bin) => {
+    const score = Number(bin.priority_score ?? 0);
+    const hotspot = String(bin.waste_hotspot_level || "").toLowerCase();
+    const status = String(bin.status || "");
+    return !bin.collected && (status === "Critical" || status === "High" || score >= 70 || hotspot === "high");
+  };
+
   const criticalBins = useMemo(
-    () => bins.filter((bin) => bin.status === "Critical" && !bin.collected),
+    () => bins.filter((bin) => isUrgentCandidate(bin) && (bin.status === "Critical" || Number(bin.priority_score || 0) >= 90)),
     [bins]
   );
   const highBins = useMemo(
-    () => bins.filter((bin) => bin.status === "High" && !bin.collected),
-    [bins]
+    () => bins.filter((bin) => isUrgentCandidate(bin) && !criticalBins.some((item) => item.bin_id === bin.bin_id)),
+    [bins, criticalBins]
   );
   const selectedCandidates = useMemo(
     () => [...criticalBins, ...highBins],
     [criticalBins, highBins]
   );
+  const hasEligibleBins = selectedCandidates.length > 0;
+  const canGenerateRoute = !loading && hasEligibleBins && Boolean(truckId);
 
   const routeBins = currentRoute?.ordered_bins || [];
+  const routeCompleted = currentRoute && routeBins.length > 0 && currentRoute.progress >= 100;
 
   const onGenerateRoute = async () => {
     setError("");
     setSuccessMsg("");
 
-    if (selectedCandidates.length === 0) {
+    if (!hasEligibleBins) {
       setError("No uncollected Critical or High priority bins available for routing.");
       return;
     }
@@ -93,18 +103,18 @@ export default function RoutesPage() {
         </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <div className="rounded-2xl bg-white p-4 shadow-card">
-          <p className="text-sm text-slate-500">Critical Bins to Collect</p>
-          <p className="mt-1 text-2xl font-bold text-danger">{criticalBins.length}</p>
+      <div className="grid gap-4 md:grid-cols-3">
+        <div className="rounded-2xl bg-white p-4 shadow-card border border-slate-100">
+          <p className="text-sm text-slate-500">Critical Bins</p>
+          <p className="mt-2 text-3xl font-bold text-danger">{criticalBins.length}</p>
         </div>
-        <div className="rounded-2xl bg-white p-4 shadow-card">
-          <p className="text-sm text-slate-500">High Priority Bins</p>
-          <p className="mt-1 text-2xl font-bold text-warning">{highBins.length}</p>
+        <div className="rounded-2xl bg-white p-4 shadow-card border border-slate-100">
+          <p className="text-sm text-slate-500">High Priority</p>
+          <p className="mt-2 text-3xl font-bold text-warning">{highBins.length}</p>
         </div>
-        <div className="rounded-2xl bg-white p-4 shadow-card">
-          <p className="text-sm text-slate-500">Available Fleet Trucks</p>
-          <p className="mt-1 text-2xl font-bold text-ink">{trucks.length}</p>
+        <div className="rounded-2xl bg-white p-4 shadow-card border border-slate-100">
+          <p className="text-sm text-slate-500">Fleet Ready</p>
+          <p className="mt-2 text-3xl font-bold text-ink">{trucks.length}</p>
         </div>
       </div>
 
@@ -112,7 +122,7 @@ export default function RoutesPage() {
         <div className="rounded-2xl bg-white p-4 shadow-card">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-semibold text-ink">Critical Bins ({criticalBins.length})</h2>
-            <span className="text-xs text-danger font-semibold">Priority 90–100</span>
+            <span className="rounded-full bg-red-50 px-2 py-1 text-[10px] font-semibold text-danger">90–100</span>
           </div>
           <BinList bins={criticalBins} />
         </div>
@@ -120,7 +130,7 @@ export default function RoutesPage() {
         <div className="rounded-2xl bg-white p-4 shadow-card">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-semibold text-ink">High Priority Bins ({highBins.length})</h2>
-            <span className="text-xs text-orange-600 font-semibold">Priority 70–89</span>
+            <span className="rounded-full bg-orange-50 px-2 py-1 text-[10px] font-semibold text-orange-600">70–89</span>
           </div>
           <BinList bins={highBins} />
         </div>
@@ -128,36 +138,65 @@ export default function RoutesPage() {
 
       {user?.role === "admin" && (
         <div className="rounded-2xl bg-white p-4 shadow-card">
-          <h2 className="mb-3 font-semibold text-ink">Dispatch Truck Selection</h2>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="font-semibold text-ink">Dispatch Truck Selection</h2>
+            <span className="text-xs text-slate-500">Choose the best available vehicle</span>
+          </div>
+
           <div className="grid gap-3 md:grid-cols-3">
             {trucks.map((truck) => (
               <button
                 key={truck.truck_id}
                 onClick={() => setTruckId(truck.truck_id)}
-                className={`rounded-xl border p-4 text-left transition ${
+                className={`rounded-2xl border p-4 text-left transition-all ${
                   truckId === truck.truck_id
-                    ? "border-primary bg-primary/5 ring-2 ring-primary/20"
-                    : "border-slate-200 hover:border-slate-300"
+                    ? "border-primary bg-primary/5 ring-2 ring-primary/20 shadow-sm"
+                    : "border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white"
                 }`}
               >
-                <div className="flex items-center justify-between">
-                  <p className="font-bold text-ink">{truck.truck_id}</p>
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xl font-bold text-ink">{truck.truck_id}</p>
                   <StatusBadge value={truck.status} />
                 </div>
-                <p className="mt-1 text-sm text-slate-600">Driver: {truck.driver_name}</p>
-                <p className="text-xs text-slate-400">Capacity: {truck.capacity_kg} kg</p>
+                <p className="mt-2 text-sm text-slate-600">Driver: {truck.driver_name}</p>
+                <p className="text-xs text-slate-500">Capacity: {truck.capacity_kg} kg</p>
               </button>
             ))}
           </div>
 
-          <div className="mt-5 flex flex-wrap items-center gap-3">
+          <div className="mt-5">
             <button
               onClick={onGenerateRoute}
-              disabled={loading || selectedCandidates.length === 0}
-              className="rounded-xl bg-primary px-5 py-2.5 font-medium text-white shadow-sm hover:bg-primary/90 disabled:opacity-50 transition"
+              disabled={!canGenerateRoute}
+              className="w-full rounded-2xl bg-primary px-5 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {loading ? "Running Google OR-Tools..." : "Generate Optimized Route (OR-Tools)"}
+              {loading ? "Running Google OR-Tools..." : "Generate Optimized Route"}
             </button>
+          </div>
+        </div>
+      )}
+
+      {!hasEligibleBins && (
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="font-semibold text-ink">
+                {routeCompleted ? "Route completed successfully" : "No urgent bins available right now"}
+              </p>
+              <p className="mt-1 text-slate-600">
+                {routeCompleted
+                  ? "All scheduled stops were collected. Generate a new route when more Critical or High priority bins appear."
+                  : "There are currently no uncollected Critical or High priority bins in the dataset."}
+              </p>
+            </div>
+            {routeCompleted && (
+              <button
+                onClick={clearCurrentRoute}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2 font-medium text-slate-700 hover:bg-slate-100"
+              >
+                Clear Route Summary
+              </button>
+            )}
           </div>
         </div>
       )}

@@ -1,5 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { collections as seedCollections, tempBins, trucks as seedTrucks } from "../data/tempData";
 import {
+  fetchBinHistory,
   fetchBins,
   fetchCollections,
   fetchTrucks,
@@ -105,6 +107,11 @@ export function AppDataProvider({ children }) {
     }
   };
 
+  const clearCurrentRoute = () => {
+    setCurrentRoute(null);
+    localStorage.removeItem("cleanroute_active_route");
+  };
+
   const markCollected = async (binId, truckId = "TRK-01") => {
     const bin = bins.find((item) => item.bin_id === binId);
     if (!bin) throw new Error(`Bin ${binId} not found.`);
@@ -197,11 +204,13 @@ export function AppDataProvider({ children }) {
           item.bin_id === binId ? { ...item, collected: true } : item
         );
         const collectedCount = ordered_bins.filter((item) => item.collected).length;
+        const progress = Math.round((collectedCount / ordered_bins.length) * 100);
         const updated = {
           ...prev,
           ordered_bins,
           collected_count: collectedCount,
-          progress: Math.round((collectedCount / ordered_bins.length) * 100),
+          progress,
+          status: progress >= 100 ? "completed" : "in_progress",
         };
         localStorage.setItem("cleanroute_active_route", JSON.stringify(updated));
         return updated;
@@ -241,6 +250,7 @@ export function AppDataProvider({ children }) {
       setNotice,
       loadData,
       setOptimizedRoute,
+      clearCurrentRoute,
       markCollected,
       updateBinPrediction,
     }),

@@ -32,7 +32,7 @@ export default function Prediction() {
 
     try {
       // 1. Call real Random Forest model via FastAPI
-      const predRes = await predictHotspot(features);
+      const predRes = await predictHotspot({ ...features, bin_id: bin.bin_id });
 
       // 2. Call priority calculation
       const priorityRes = await calculatePriorityScore({

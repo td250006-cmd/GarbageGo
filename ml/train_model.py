@@ -26,8 +26,18 @@ from preprocess import (
 )
 
 ROOT = Path(__file__).resolve().parent
-DATASET_PATH = ROOT / "urban_waste_hotspot_dataset.csv"
 MODEL_PATH = ROOT / "model.pkl"
+
+
+def resolve_dataset_path():
+    for name in ("dataset.csv", "urban_waste_hotspot_dataset.csv"):
+        path = ROOT / name
+        if path.exists():
+            return path
+    return ROOT / "dataset.csv"
+
+
+DATASET_PATH = resolve_dataset_path()
 
 
 def load_dataset(path=DATASET_PATH):

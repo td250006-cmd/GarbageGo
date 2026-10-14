@@ -51,7 +51,6 @@ UNUSED_FOR_ML = ["bin_id", "latitude", "longitude"]
 def validate_dataset_columns(columns):
     missing = [col for col in REQUIRED_COLUMNS if col not in columns]
     if missing:
-        raise ValueError(
-            "Invalid dataset. Missing required columns: " + ", ".join(missing)
-        )
+        missing_list = "\n".join(missing)
+        raise ValueError(f"Dataset validation failed.\nMissing column:\n{missing_list}")
     return True

@@ -16,18 +16,26 @@ def _haversine_km(lat1, lon1, lat2, lon2):
 
 def optimize_route(truck_id, depot, bins):
     if not bins:
-        raise ValueError("Empty route. Select Critical and High priority bins first.")
+        raise ValueError("Empty route. Select an actionable priority bin first.")
 
     normalized_bins = []
     for bin_row in bins:
         if bin_row.get("latitude") is None or bin_row.get("longitude") is None:
             raise ValueError(f"Invalid coordinates for {bin_row.get('bin_id')}.")
-        p_status = bin_row.get("priority_status") or bin_row.get("status")
-        if p_status not in ("Critical", "High"):
-            raise ValueError(f"Route optimization only accepts Critical and High bins. Bin {bin_row.get('bin_id')} has status '{p_status}'.")
+
+        p_status = (bin_row.get("priority_status") or bin_row.get("status") or "Normal").strip()
+        priority_score = float(bin_row.get("priority_score") or 0)
+        hotspot = str(bin_row.get("waste_hotspot_level") or "").lower()
+        is_actionable = p_status in ("Critical", "High") or priority_score >= 70 or hotspot == "high"
+        if not is_actionable:
+            continue
+
         row_copy = dict(bin_row)
-        row_copy["priority_status"] = p_status
+        row_copy["priority_status"] = p_status or "High"
         normalized_bins.append(row_copy)
+
+    if not normalized_bins:
+        raise ValueError("No actionable bins available for route optimization. Priority targets must be Critical, High, or score >= 70.")
 
     bins = normalized_bins
 
